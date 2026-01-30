@@ -1,4 +1,4 @@
-name: Release triton-sdpkjc
+name: Release Wheels
 
 on:
   push:

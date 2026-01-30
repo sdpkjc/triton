@@ -827,7 +827,7 @@ PYTHON_CLASSIFIERS = [
 CLASSIFIERS = BASE_CLASSIFIERS + PYTHON_CLASSIFIERS
 
 setup(
-    name=os.environ.get("TRITON_WHEEL_NAME", "triton-sdpkjc"),
+    name=os.environ.get("TRITON_WHEEL_NAME", "triton"),
     version=TRITON_VERSION,
     author="Philippe Tillet",
     author_email="phil@openai.com",
