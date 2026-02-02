@@ -1,0 +1,109 @@
+name: Release Wheels
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g., v3.5.0.post1)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-wheels:
+    if: ${{ github.repository == 'sdpkjc/triton' }}
+    runs-on: ${{ matrix.config.runs_on }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        config:
+          - {runs_on: 'ubuntu-latest', arch: 'x86_64'}
+        python-version: ['cp310', 'cp311', 'cp312', 'cp313']
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install cibuildwheel
+        run: python -m pip install cibuildwheel==2.21.0
+
+      - name: Build wheels
+        run: |
+          python -m cibuildwheel --output-dir wheelhouse
+        env:
+          CIBW_BUILD: ${{ matrix.python-version }}-manylinux_${{ matrix.config.arch }}
+          CIBW_MANYLINUX_X86_64_IMAGE: "manylinux_2_28"
+          CIBW_BEFORE_ALL: "dnf install clang lld -y"
+          CIBW_ENVIRONMENT: "MAX_JOBS=4 TRITON_BUILD_WITH_CLANG_LLD=1"
+
+      - name: Upload wheels as artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.python-version }}-${{ matrix.config.arch }}
+          path: ./wheelhouse/*.whl
+
+  build-sdist:
+    if: ${{ github.repository == 'sdpkjc/triton' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: 'recursive'
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Fix version for tag builds
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          sed -i -e "s:^TRITON_VERSION = .*:TRITON_VERSION = '${TAG}':" setup.py
+
+      - name: Build sdist
+        run: |
+          pip install build
+          python -m build -s
+
+      - name: Upload sdist as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  publish-release:
+    needs: [build-wheels, build-sdist]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List files
+        run: ls -la dist/
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
