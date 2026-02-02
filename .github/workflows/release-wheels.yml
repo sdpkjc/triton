@@ -75,6 +75,8 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           TAG="${GITHUB_REF#refs/tags/v}"
+          # Remove -sdpkjc suffix to keep version consistent with official releases
+          TAG="${TAG%-sdpkjc}"
           sed -i -e "s:^TRITON_VERSION = .*:TRITON_VERSION = '${TAG}':" setup.py
 
       - name: Build sdist
